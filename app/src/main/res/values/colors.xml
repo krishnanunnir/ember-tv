@@ -10,6 +10,8 @@
     <color name="field">#1E1E1C</color>
     <color name="legend">#F2F0EB</color>
     <color name="legend_secondary">#B5B2AA</color>
+    <!-- Text laid straight on the background picture: brighter than secondary so it holds on a light photo. -->
+    <color name="legend_on_picture">#D4D0C8</color>
     <color name="danger">#FF9E8A</color>
     <color name="signal">#E8721C</color>
 </resources>

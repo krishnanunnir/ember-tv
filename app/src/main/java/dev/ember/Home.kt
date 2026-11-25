@@ -26,6 +26,9 @@ import android.view.Gravity
 import android.view.KeyEvent
 import android.view.View
 import android.view.ViewGroup
+import android.animation.LayoutTransition
+import android.text.format.DateFormat
+import java.util.Locale
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
 import android.view.Window
@@ -196,11 +199,13 @@ class Home : Activity() {
     private fun header() = LinearLayout(this).apply {
         gravity = Gravity.CENTER_VERTICAL
         minimumHeight = dp(32)
+        clipChildren = false
+        layoutTransition = slide() // a key's name opening slides its neighbour along instead of jumping it
         addView(TextClock(context).apply {
-            format12Hour = "EEEE, d MMMM"
-            format24Hour = "EEEE, d MMMM"
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
-            setTextColor(getColor(R.color.legend_secondary))
+            DateFormat.getBestDateTimePattern(Locale.getDefault(), "EEEEdMMMM").let { format12Hour = it; format24Hour = it }
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+            setTextColor(getColor(R.color.legend_on_picture))
+            onPicture()
         })
         addView(View(context), LinearLayout.LayoutParams(0, 1, 1f))
         addView(iconKey(R.drawable.ic_search, R.string.search) { search() })
@@ -212,12 +217,25 @@ class Home : Activity() {
             format12Hour = if (clock == "24") "HH:mm" else "h:mm"
             format24Hour = if (clock == "12") "h:mm" else "HH:mm"
             typeface = LIGHT
+            fontFeatureSettings = "tnum" // even-width digits, so the clock doesn't twitch each minute
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 24f)
             setTextColor(getColor(R.color.legend))
+            onPicture()
         }, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { marginStart = dp(16) })
     }
 
-    /** A round icon key whose name shows only while the remote is on it. */
+    /** A soft drop shadow that keeps text readable on a bright own picture. */
+    private fun TextView.onPicture() = setShadowLayer(dp(6).toFloat(), 0f, dp(1).toFloat(), 0x73000000)
+
+    /** Size changes animate (160 ms, no delay) instead of snapping. */
+    private fun slide() = LayoutTransition().apply {
+        enableTransitionType(LayoutTransition.CHANGING)
+        setDuration(160)
+        listOf(LayoutTransition.APPEARING, LayoutTransition.DISAPPEARING, LayoutTransition.CHANGE_APPEARING,
+            LayoutTransition.CHANGE_DISAPPEARING, LayoutTransition.CHANGING).forEach { setStartDelay(it, 0) }
+    }
+
+    /** A round icon key whose name opens out beside the icon while the remote is on it. */
     private fun iconKey(iconId: Int, nameId: Int, onClick: () -> Unit) = LinearLayout(this).apply {
         gravity = Gravity.CENTER_VERTICAL
         isFocusable = true
@@ -225,10 +243,12 @@ class Home : Activity() {
         minimumHeight = dp(28); minimumWidth = dp(28)
         setPadding(dp(7), 0, dp(7), 0)
         background = keyBackground(14, 0xB8363632.toInt())
+        layoutTransition = slide()
         addView(icon(iconId), LinearLayout.LayoutParams(dp(14), dp(14)))
         val name = legend(getString(nameId), 11f).apply { typeface = MEDIUM; visibility = View.GONE; setPadding(dp(6), 0, dp(4), 0) }
         addView(name)
-        setOnFocusChangeListener { _, has -> name.visibility = if (has) View.VISIBLE else View.GONE }
+        lift() // the same lift and accent glow as the tiles
+        setOnFocusChangeListener { v, has -> v.animateFocus(has); name.visibility = if (has) View.VISIBLE else View.GONE }
         setOnClickListener { onClick() }
     }
 
