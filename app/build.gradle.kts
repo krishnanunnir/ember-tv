@@ -11,8 +11,8 @@ android {
         applicationId = "dev.ember"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1"
+        versionCode = 2
+        versionName = "0.2"
     }
 
     dependenciesInfo {
@@ -37,4 +37,10 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions { jvmTarget = "17" }
+}
+
+dependencies {
+    testImplementation("junit:junit:4.13.2")
+    // org.json is stubbed in unit tests; the real one runs the backup round trip.
+    testImplementation("org.json:json:20240303")
 }

@@ -19,6 +19,12 @@
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />
         </intent>
+        <!-- Icon packs (Settings → Icon pack). -->
+        <intent><action android:name="org.adw.launcher.THEMES" /></intent>
+        <intent><action android:name="com.novalauncher.THEME" /></intent>
+        <!-- The file picker for backup and the own background, to tell when the TV has none. -->
+        <intent><action android:name="android.intent.action.OPEN_DOCUMENT" /><data android:mimeType="*/*" /></intent>
+        <intent><action android:name="android.intent.action.CREATE_DOCUMENT" /><data android:mimeType="*/*" /></intent>
     </queries>
 
     <application
@@ -44,6 +50,8 @@
                 <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <activity android:name=".EmberSettings" android:exported="false" android:label="@string/settings_title" />
 
         <!-- Google TV's own home outranks any other HOME app, so Home always opens it first. This service sees that
              window appear and brings Ember forward instead. The user switches it on in Accessibility settings. -->

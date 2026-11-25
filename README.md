@@ -5,7 +5,11 @@
 A small, calm home screen for Android TV and Google TV, built for the remote.
 
 - A clock, a **Favourites** row, your **Inputs** (HDMI, AV) and **All apps**, as 16:9 banners.
-- Hold **OK** on an app to add it to Favourites, move it, open App info or uninstall it.
+- Hold **OK** on an app to add it to Favourites, move it, rename it, hide it, open App info or uninstall it.
+- **Search** that forgives a slip of the remote's keyboard ("plya" finds Play Store).
+- **Settings**: background (built-in, plain or your own picture), dimming, accent colour, icon pack for apps without
+  a TV banner, clock, apps per row, Inputs row and empty ports, hidden apps, Home-button status, backup and restore.
+  Most TVs have no file picker; then backup goes to `Android/data/dev.ember/files/ember-backup.json`.
 - No ads, no recommendations, no network access, no tracking.
 
 ## Install
