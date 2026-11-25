@@ -1,0 +1,15 @@
+<resources>
+    <string name="app_name">Ember</string>
+    <string name="favourites">FAVOURITES</string>
+    <string name="all_apps">ALL APPS</string>
+    <string name="settings">SETTINGS</string>
+    <string name="no_favourites">Hold OK on an app to add it here</string>
+    <string name="add_favourite">Add to favourites</string>
+    <string name="remove_favourite">Remove from favourites</string>
+    <string name="move_left">Move left</string>
+    <string name="move_right">Move right</string>
+    <string name="app_info">App info</string>
+    <string name="uninstall">Uninstall</string>
+    <string name="cant_open">Can\'t open this app</string>
+    <string name="watcher_description">Opens Ember when you press Home, instead of the Google TV home screen. Ember reads nothing else.</string>
+</resources>
