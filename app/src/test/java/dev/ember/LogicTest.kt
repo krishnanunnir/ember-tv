@@ -28,6 +28,19 @@ class LogicTest {
 
     @Test(expected = IllegalArgumentException::class) fun foreignFileRefused() { restoreJson("""{"cols":"5"}""") }
 
+    @Test fun buttonTextReadsOnAccent() {
+        assertEquals(0xFF1C1B19.toInt(), onColor(0xFFE8721C.toInt())) // signal orange: dark text
+        assertEquals(0xFF1C1B19.toInt(), onColor(0xFFFFFFFF.toInt()))
+        assertEquals(-1, onColor(0xFF3949AB.toInt())) // indigo: white text
+    }
+
+    @Test fun iconTint() {
+        val red = 0xFFFF0000.toInt()
+        assertEquals(red, averageOpaque(intArrayOf(red, red, 0x00000000)))
+        assertNull(averageOpaque(intArrayOf(0x10FFFFFF)))
+        assertEquals(0xFF7F0000.toInt(), shade(red, 0.5f, 0xFF000000.toInt()))
+    }
+
     @Test fun sampleSizeKeepsScreenWidth() {
         assertEquals(2, sampleSize(4000, 1920))
         assertEquals(1, sampleSize(1920, 1920))

@@ -1,7 +1,7 @@
 package dev.ember
 
 import android.app.Activity
-import android.app.AlertDialog
+import android.app.Dialog
 import android.content.ActivityNotFoundException
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -9,8 +9,10 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.SharedPreferences
 import android.graphics.BitmapFactory
-import android.graphics.Typeface
+import android.graphics.Color
+import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.StateListDrawable
 import android.media.tv.TvContract
 import android.media.tv.TvInputManager
 import android.net.Uri
@@ -26,20 +28,21 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
-import android.widget.ArrayAdapter
+import android.view.Window
+import android.view.WindowManager
+import android.view.inputmethod.EditorInfo
 import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.HorizontalScrollView
 import android.widget.ImageView
 import android.widget.LinearLayout
-import android.widget.ListView
 import android.widget.ScrollView
 import android.widget.TextClock
 import android.widget.TextView
 import android.widget.Toast
 import java.io.File
 
-/** The home screen: a clock, a favourites row, the TV's inputs and every app, all driven by the remote's D-pad. */
+/** The home screen: a top bar, a favourites row, the TV's inputs and every app, all driven by the remote's D-pad. */
 class Home : Activity() {
 
     private class Input(val id: String, val label: String, val state: Int) {
@@ -47,10 +50,14 @@ class Home : Activity() {
     }
 
     private lateinit var favRow: LinearLayout
+    private lateinit var favScroll: HorizontalScrollView
     private lateinit var favHint: TextView
+    private lateinit var caption: LinearLayout
+    private lateinit var captionName: TextView
     private lateinit var grid: LinearLayout
     private lateinit var inputLabel: View
     private lateinit var inputRow: LinearLayout
+    private lateinit var allLabel: TextView
     private var cols = 5
     private var tileW = 0
     private var tileH = 0
@@ -85,41 +92,47 @@ class Home : Activity() {
         tileW = (resources.displayMetrics.widthPixels - 2 * sideMargin - gap * (cols - 1)) / cols
         tileH = tileW * 9 / 16
 
-        favRow = LinearLayout(this).apply { clipChildren = false; clipToPadding = false; setPadding(0, dp(10), 0, dp(10)) }
-        favHint = legend(getString(R.string.no_favourites), 16f, R.color.legend_secondary)
+        favRow = LinearLayout(this).apply { clipChildren = false; clipToPadding = false; setPadding(0, dp(6), 0, dp(6)) }
+        favHint = legend(getString(R.string.no_favourites), 13f, R.color.legend_secondary)
+        favScroll = HorizontalScrollView(this).apply {
+            isHorizontalScrollBarEnabled = false
+            clipChildren = false
+            clipToPadding = false
+            addView(favRow)
+            setOnScrollChangeListener { _, _, _, _, _ -> placeCaption() }
+        }
+        // The focused favourite's name sits in a fixed-height line, so moving along the row moves nothing below it.
+        captionName = legend("", 13f).oneLine().apply { typeface = MEDIUM }
+        caption = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            visibility = View.INVISIBLE
+            setPadding(dp(2), dp(4), 0, 0)
+            addView(captionName)
+            addView(legend(getString(R.string.hold_for_options), 9f, R.color.legend_secondary))
+        }
         grid = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; clipChildren = false }
-        inputLabel = label(R.string.inputs)
-        inputRow = LinearLayout(this).apply { clipChildren = false; clipToPadding = false; setPadding(0, dp(10), 0, dp(10)) }
+        inputLabel = heading(R.string.inputs)
+        inputRow = LinearLayout(this).apply { clipChildren = false; clipToPadding = false; setPadding(0, dp(4), 0, dp(4)) }
+        allLabel = heading(R.string.all_apps)
 
         val column = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             clipChildren = false
             clipToPadding = false
-            setPadding(sideMargin, dp(27), sideMargin, dp(27))
+            setPadding(sideMargin, dp(24), sideMargin, dp(27))
             addView(header())
-            addView(label(R.string.favourites))
+            addView(heading(R.string.favourites))
             addView(favHint)
-            addView(HorizontalScrollView(context).apply {
-                isHorizontalScrollBarEnabled = false
-                clipChildren = false
-                clipToPadding = false
-                addView(favRow)
-            })
+            addView(favScroll)
+            addView(caption, LinearLayout.LayoutParams(tileW, dp(34)))
             addView(inputLabel)
             addView(inputRow)
-            addView(label(R.string.all_apps))
+            addView(allLabel)
             addView(grid)
         }
         setContentView(FrameLayout(this).apply {
             background()?.let { addView(it, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT)) }
-            if (p[BACKGROUND] != "plain") {
-                // Dims the picture most behind the clock and the app rows, so legends and banners stay readable.
-                val a = p.int(DIM) * 255 / 100
-                fun dim(f: Float) = (a * f).toInt().coerceAtMost(255) shl 24 or 0x1E1E1C
-                addView(View(context).apply {
-                    background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(dim(1.4f), dim(0.7f), dim(1.7f)))
-                }, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
-            }
+            if (p[BACKGROUND] != "plain") addView(View(context).apply { background = dimming(p.int(DIM)) }, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
             addView(ScrollView(context).apply {
                 isVerticalScrollBarEnabled = false
                 isFillViewport = true
@@ -170,7 +183,7 @@ class Home : Activity() {
         val own = File(filesDir, BACKGROUND_FILE)
         val bitmap = when (prefs[BACKGROUND]) {
             "plain" -> return null
-            "image" -> if (own.exists()) decodeScreenSized(own) else null
+            "image" -> if (own.exists()) decodeSized(own, resources.displayMetrics.widthPixels) else null
             else -> null
         }
         return ImageView(this).apply {
@@ -179,31 +192,44 @@ class Home : Activity() {
         }
     }
 
-    /** [f] decoded at about screen size: a 4000 px photo at full size would hold ~60 MB on a 2 GB TV. */
-    private fun decodeScreenSized(f: File) = runCatching {
-        val o = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        BitmapFactory.decodeFile(f.path, o)
-        o.inSampleSize = sampleSize(maxOf(o.outWidth, o.outHeight), resources.displayMetrics.widthPixels)
-        o.inJustDecodeBounds = false
-        BitmapFactory.decodeFile(f.path, o)
-    }.getOrNull()
-
+    /** The date on the left; Search, Settings and the time on the right. */
     private fun header() = LinearLayout(this).apply {
         gravity = Gravity.CENTER_VERTICAL
+        minimumHeight = dp(32)
+        addView(TextClock(context).apply {
+            format12Hour = "EEEE, d MMMM"
+            format24Hour = "EEEE, d MMMM"
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+            setTextColor(getColor(R.color.legend_secondary))
+        })
+        addView(View(context), LinearLayout.LayoutParams(0, 1, 1f))
+        addView(iconKey(R.drawable.ic_search, R.string.search) { search() })
+        addView(iconKey(R.drawable.ic_tune, R.string.settings) { open(Intent(context, EmberSettings::class.java)) },
+            LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { marginStart = dp(8) })
         val clock = prefs[CLOCK]
         if (clock != "off") addView(TextClock(context).apply {
             // TextClock picks the TV's own 12/24-hour setting; a fixed choice sets both formats alike.
             format12Hour = if (clock == "24") "HH:mm" else "h:mm"
             format24Hour = if (clock == "12") "h:mm" else "HH:mm"
-            typeface = Typeface.create("sans-serif-light", Typeface.NORMAL)
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 56f)
-            letterSpacing = -0.02f
+            typeface = LIGHT
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 24f)
             setTextColor(getColor(R.color.legend))
-        })
-        addView(View(context), LinearLayout.LayoutParams(0, 1, 1f))
-        addView(pill(R.string.search) { search() })
-        addView(pill(R.string.settings) { open(Intent(context, EmberSettings::class.java)) },
-            LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { marginStart = dp(16) })
+        }, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { marginStart = dp(16) })
+    }
+
+    /** A round icon key whose name shows only while the remote is on it. */
+    private fun iconKey(iconId: Int, nameId: Int, onClick: () -> Unit) = LinearLayout(this).apply {
+        gravity = Gravity.CENTER_VERTICAL
+        isFocusable = true
+        contentDescription = getString(nameId)
+        minimumHeight = dp(28); minimumWidth = dp(28)
+        setPadding(dp(7), 0, dp(7), 0)
+        background = keyBackground(14, 0xB8363632.toInt())
+        addView(icon(iconId), LinearLayout.LayoutParams(dp(14), dp(14)))
+        val name = legend(getString(nameId), 11f).apply { typeface = MEDIUM; visibility = View.GONE; setPadding(dp(6), 0, dp(4), 0) }
+        addView(name)
+        setOnFocusChangeListener { _, has -> name.visibility = if (has) View.VISIBLE else View.GONE }
+        setOnClickListener { onClick() }
     }
 
     /**
@@ -232,7 +258,7 @@ class Home : Activity() {
         val inputs = if (p.on(INPUTS)) loadInputs().filter { it.plugged || p.on(EMPTY_PORTS) } else emptyList()
         inputRow.removeAllViews()
         inputs.forEachIndexed { i, input ->
-            inputRow.addView(inputTile(input), LinearLayout.LayoutParams(tileW, tileH).apply { if (i > 0) marginStart = dp(16) })
+            inputRow.addView(inputKey(input), LinearLayout.LayoutParams(tileW, dp(48)).apply { if (i > 0) marginStart = dp(16) })
         }
         (if (inputs.isEmpty()) View.GONE else View.VISIBLE).let { inputLabel.visibility = it; inputRow.visibility = it }
 
@@ -245,7 +271,10 @@ class Home : Activity() {
             favRow.addView(tile(byPkg.getValue(pkg), "f:"), LinearLayout.LayoutParams(tileW, tileH).apply { if (i > 0) marginStart = dp(16) })
         }
         favHint.visibility = if (favList.isEmpty()) View.VISIBLE else View.GONE
+        favScroll.visibility = if (favList.isEmpty()) View.GONE else View.VISIBLE
+        caption.visibility = if (favList.isEmpty()) View.GONE else View.INVISIBLE
 
+        allLabel.text = getString(R.string.all_apps) + "  ·  " + apps.size
         grid.removeAllViews()
         apps.chunked(cols).forEach { chunk ->
             grid.addView(LinearLayout(this).apply {
@@ -253,7 +282,7 @@ class Home : Activity() {
                 chunk.forEachIndexed { i, app ->
                     addView(tile(app, "a:"), LinearLayout.LayoutParams(tileW, tileH).apply { if (i > 0) marginStart = dp(16) })
                 }
-            }, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(10); bottomMargin = dp(6) })
+            }, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(6); bottomMargin = dp(8) })
         }
 
         val target = focusTag?.let { window.decorView.findViewWithTag<View>(it) }
@@ -261,67 +290,49 @@ class Home : Activity() {
         target?.requestFocus()
     }
 
-    /** The shared 16:9 key: raised, rounded, accent edge and a small lift on focus. */
-    private fun key(tag: String, description: String) = FrameLayout(this).apply {
-        this.tag = tag
-        isFocusable = true
-        contentDescription = description
-        val radius = dp(12).toFloat()
-        background = GradientDrawable().apply { cornerRadius = radius; setColor(getColor(R.color.raised)) }
-        foreground = focusRing(radius)
-        clipToOutline = true
-        setOnFocusChangeListener { v, has ->
-            v.animate().scaleX(if (has) 1.08f else 1f).scaleY(if (has) 1.08f else 1f).translationZ(if (has) dp(8).toFloat() else 0f).setDuration(120).start()
-        }
+    /** Lines the caption up under the focused favourite. */
+    private fun placeCaption() {
+        val f = currentFocus?.takeIf { it.parent === favRow } ?: return
+        caption.translationX = (f.left - favScroll.scrollX).toFloat()
     }
 
-    private fun inputTile(input: Input): View = key("i:" + input.id, input.label).apply {
+    /** A plugged-in device: its name and whether it is on, as a wide key. */
+    private fun inputKey(input: Input): View = LinearLayout(this).apply {
+        tag = "i:" + input.id
+        isFocusable = true
+        contentDescription = input.label
+        gravity = Gravity.CENTER_VERTICAL
+        setPadding(dp(12), 0, dp(12), 0)
+        background = if (input.plugged) rounded(0xD62A2A28.toInt(), 11)
+            else rounded(0x801C1B19.toInt(), 11).apply { setStroke(dp(1), 0x24F2F0EB) }
+        foreground = focusRing(11)
+        lift()
+        addView(icon(R.drawable.ic_input_hdmi), LinearLayout.LayoutParams(dp(20), dp(20)).apply { marginEnd = dp(10) })
         addView(LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER
-            // Empty ports stay in place, dimmed, so HDMI 1–3 keep their order.
-            alpha = if (input.plugged) 1f else 0.5f
-            addView(ImageView(context).apply {
-                setImageResource(R.drawable.ic_input_hdmi)
-                setColorFilter(getColor(R.color.legend))
-            }, LinearLayout.LayoutParams(dp(32), dp(32)))
-            addView(legend(input.label, 15f, R.color.legend).apply {
-                maxLines = 1
-                gravity = Gravity.CENTER
-                ellipsize = android.text.TextUtils.TruncateAt.END
-                setPadding(dp(8), dp(4), dp(8), 0)
+            addView(legend(input.label, 11f).oneLine().apply { typeface = MEDIUM })
+            addView(LinearLayout(context).apply {
+                gravity = Gravity.CENTER_VERTICAL
+                val (status, dot) = when (input.state) {
+                    TvInputManager.INPUT_STATE_CONNECTED -> R.string.input_connected to 0xFF6FCF8E.toInt()
+                    TvInputManager.INPUT_STATE_CONNECTED_STANDBY -> R.string.input_standby to 0xFFE8B04A.toInt()
+                    else -> R.string.input_empty to 0xFF77746C.toInt()
+                }
+                addView(View(context).apply { background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(dot) } },
+                    LinearLayout.LayoutParams(dp(5), dp(5)).apply { marginEnd = dp(4) })
+                addView(legend(getString(status), 9f, R.color.legend_secondary))
             })
-            addView(legend(getString(when (input.state) {
-                TvInputManager.INPUT_STATE_CONNECTED -> R.string.input_connected
-                TvInputManager.INPUT_STATE_CONNECTED_STANDBY -> R.string.input_standby
-                else -> R.string.input_empty
-            }), 12f, R.color.legend_secondary))
-        }, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+        })
         // The TV's own input player shows the picture, as with Google TV's Inputs menu.
         setOnClickListener { open(Intent(Intent.ACTION_VIEW, TvContract.buildChannelUriForPassthroughInput(input.id))) }
     }
 
-    private fun tile(app: App, section: String): View = key(section + app.pkg, app.label).apply {
-        // A banner says the app's own name; a renamed app shows its icon and the new name instead.
-        if (app.banner != null && app.label == app.title) {
-            addView(ImageView(context).apply {
-                setImageDrawable(app.banner)
-                scaleType = ImageView.ScaleType.CENTER_CROP
-            }, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
-        } else {
-            addView(LinearLayout(context).apply {
-                orientation = LinearLayout.VERTICAL
-                gravity = Gravity.CENTER
-                addView(ImageView(context).apply { setImageDrawable(app.icon) }, LinearLayout.LayoutParams(dp(40), dp(40)))
-                addView(legend(app.label, 13f, R.color.legend).apply {
-                    maxLines = 1
-                    gravity = Gravity.CENTER
-                    ellipsize = android.text.TextUtils.TruncateAt.END
-                    setPadding(dp(8), dp(6), dp(8), 0)
-                })
-            }, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+    private fun tile(app: App, section: String): View = appTile(app, section + app.pkg).apply {
+        if (section == "f:") setOnFocusChangeListener { v, has ->
+            v.animateFocus(has)
+            caption.visibility = if (has) View.VISIBLE else View.INVISIBLE
+            if (has) { captionName.text = app.label; v.post { placeCaption() } }
         }
-
         setOnClickListener { launch(app.pkg) }
         setOnLongClickListener { menu(app, section); true }
     }
@@ -337,75 +348,170 @@ class Home : Activity() {
 
     private fun toastCantOpen() = Toast.makeText(this, R.string.cant_open, Toast.LENGTH_SHORT).show()
 
+    /** The app menu: a panel from the right with the app's banner and what can be done with it. */
     private fun menu(app: App, section: String) {
         val p = prefs
         val list = p.list("favs").toMutableList()
         val at = list.indexOf(app.pkg)
         fun favs(v: List<String>, focus: String?) { p.putList("favs", v); render(focus) }
-        val items = mutableListOf<Pair<Int, () -> Unit>>()
+        val items = mutableListOf<Triple<Int, Int, () -> Unit>>()
         if (at < 0) {
-            items += R.string.add_favourite to { favs(list + app.pkg, "f:" + app.pkg) }
+            items += Triple(R.drawable.ic_star, R.string.add_favourite) { favs(list + app.pkg, "f:" + app.pkg) }
         } else {
-            if (at > 0) items += R.string.move_left to { favs(list.apply { add(at - 1, removeAt(at)) }, "f:" + app.pkg) }
-            if (at < list.size - 1) items += R.string.move_right to { favs(list.apply { add(at + 1, removeAt(at)) }, "f:" + app.pkg) }
-            items += R.string.remove_favourite to { favs(list - app.pkg, if (section == "a:") "a:" + app.pkg else null) }
+            if (at > 0) items += Triple(R.drawable.ic_arrow_left, R.string.move_left) { favs(list.apply { add(at - 1, removeAt(at)) }, "f:" + app.pkg) }
+            if (at < list.size - 1) items += Triple(R.drawable.ic_arrow_right, R.string.move_right) { favs(list.apply { add(at + 1, removeAt(at)) }, "f:" + app.pkg) }
+            items += Triple(R.drawable.ic_star_off, R.string.remove_favourite) { favs(list - app.pkg, if (section == "a:") "a:" + app.pkg else null) }
         }
-        items += R.string.rename to { rename(app, section) }
+        items += Triple(R.drawable.ic_edit, R.string.rename) { rename(app, section) }
         // Hidden apps come back from Settings → Hidden apps.
-        items += R.string.hide to { p.putList("hidden", p.list("hidden") + app.pkg); render(null) }
+        items += Triple(R.drawable.ic_hide, R.string.hide) { p.putList("hidden", p.list("hidden") + app.pkg); render(null) }
         val pkgUri = Uri.fromParts("package", app.pkg, null)
-        items += R.string.app_info to { open(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, pkgUri)) }
-        items += R.string.uninstall to { open(Intent(Intent.ACTION_DELETE, pkgUri)) }
+        items += Triple(R.drawable.ic_info, R.string.app_info) { open(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, pkgUri)) }
+        items += Triple(R.drawable.ic_delete, R.string.uninstall) { open(Intent(Intent.ACTION_DELETE, pkgUri)) }
 
-        AlertDialog.Builder(this)
-            .setTitle(app.label)
-            .setItems(items.map { getString(it.first) }.toTypedArray()) { _, which -> items[which].second() }
-            .show()
-    }
-
-    /** An empty name puts the app's own back. */
-    private fun rename(app: App, section: String) {
-        val field = EditText(this).apply { setText(app.label); setSelectAllOnFocus(true); isSingleLine = true }
-        AlertDialog.Builder(this)
-            .setTitle(R.string.rename)
-            .setView(FrameLayout(this).apply { setPadding(dp(24), dp(8), dp(24), 0); addView(field) })
-            .setPositiveButton(android.R.string.ok) { _, _ ->
-                val name = field.text.toString().trim()
-                prefs.edit().apply { if (name.isEmpty() || name == app.title) remove("label:${app.pkg}") else putString("label:${app.pkg}", name) }.apply()
-                render(section + app.pkg)
+        lateinit var panel: Dialog
+        val content = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(28), dp(32), dp(28), dp(32))
+            addView(FrameLayout(context).apply {
+                background = rounded(tint(app), 11)
+                clipToOutline = true
+                addView(tileFace(app, 64, 18f), FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+            }, LinearLayout.LayoutParams(MATCH_PARENT, dp(160)))
+            addView(legend(app.label, 20f).oneLine().apply { typeface = MEDIUM; setPadding(0, dp(14), 0, dp(2)) })
+            addView(legend(if (at < 0) getString(R.string.not_in_favourites) else getString(R.string.in_favourites, at + 1, list.size),
+                10f, R.color.legend_secondary).apply { setPadding(0, 0, 0, dp(12)) })
+            items.forEach { (iconId, text, action) ->
+                addView(actionRow(iconId, getString(text), if (text == R.string.uninstall) R.color.danger else R.color.legend) {
+                    panel.dismiss(); action()
+                }, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(3) })
             }
-            .setNegativeButton(android.R.string.cancel, null)
-            .show()
+        }
+        panel = sidePanel(340, ScrollView(this).apply { isVerticalScrollBarEnabled = false; addView(content) })
+        panel.show()
+        content.getChildAt(3)?.requestFocus() // the first action; a TV dialog otherwise starts with nothing lit
     }
 
-    /** Vulcan's drawer search for the remote: type, then press down into the best matches. */
+    /** A card at the top, so the TV's keyboard fits below it. An empty name puts the app's own back. */
+    private fun rename(app: App, section: String) {
+        val dialog = Dialog(this)
+        fun save(name: String) {
+            prefs.edit().apply { if (name.isEmpty() || name == app.title) remove("label:${app.pkg}") else putString("label:${app.pkg}", name) }.apply()
+            dialog.dismiss()
+            render(section + app.pkg)
+        }
+        val field = EditText(this).apply {
+            setText(app.label)
+            setSelectAllOnFocus(true)
+            isSingleLine = true
+            imeOptions = EditorInfo.IME_ACTION_DONE
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f)
+            setTextColor(getColor(R.color.legend))
+            setPadding(dp(14), 0, dp(14), 0)
+            background = StateListDrawable().apply {
+                addState(intArrayOf(android.R.attr.state_focused), rounded(getColor(R.color.field), 10).apply { setStroke(dp(2), accent) })
+                addState(intArrayOf(), rounded(getColor(R.color.field), 10))
+            }
+            setOnEditorActionListener { v, _, _ -> save(v.text.toString().trim()); true }
+        }
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE)
+        dialog.setContentView(LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(28), dp(24), dp(28), dp(24))
+            background = rounded(getColor(R.color.housing), 16)
+            addView(LinearLayout(context).apply {
+                gravity = Gravity.CENTER_VERTICAL
+                addView(FrameLayout(context).apply {
+                    background = rounded(tint(app), 7)
+                    clipToOutline = true
+                    addView(tileFace(app, 20, 9f), FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+                }, LinearLayout.LayoutParams(dp(80), dp(45)).apply { marginEnd = dp(12) })
+                addView(legend(getString(R.string.rename_title, app.label), 20f).oneLine().apply { typeface = MEDIUM })
+            })
+            addView(legend(getString(R.string.rename_label), 10f, R.color.legend_secondary).apply { setPadding(0, dp(14), 0, dp(6)) })
+            addView(field, LinearLayout.LayoutParams(MATCH_PARENT, dp(44)))
+            addView(legend(getString(R.string.rename_hint), 10f, R.color.legend_secondary).apply { setPadding(0, dp(10), 0, dp(14)) })
+            addView(LinearLayout(context).apply {
+                clipChildren = false
+                addView(button(getString(R.string.save), true) { save(field.text.toString().trim()) })
+                addView(button(getString(R.string.cancel), false) { dialog.dismiss() },
+                    LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { marginStart = dp(8) })
+            })
+        })
+        dialog.window!!.apply {
+            setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+            setGravity(Gravity.TOP)
+            setLayout(dp(480), WRAP_CONTENT)
+            attributes = attributes.apply { y = dp(48) }
+            setDimAmount(0.74f)
+            setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE or WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING)
+        }
+        dialog.show()
+    }
+
+    /** Vulcan's drawer search for the remote, full screen: type, then press down into the best matches. */
     private fun search() {
         val apps = shownApps()
         var matches = apps
-        val adapter = ArrayAdapter<String>(this, android.R.layout.simple_list_item_1, apps.map { it.label }.toMutableList())
-        val field = EditText(this).apply { hint = getString(R.string.search_hint); isSingleLine = true }
-        val results = ListView(this).apply { this.adapter = adapter }
-        val dialog = AlertDialog.Builder(this)
-            .setView(LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                setPadding(dp(24), dp(16), dp(24), 0)
-                addView(field)
-                addView(results, LinearLayout.LayoutParams(MATCH_PARENT, dp(320)))
-            })
-            .create()
-        field.addTextChangedListener(object : TextWatcher {
-            override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
-            override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
-            override fun afterTextChanged(s: Editable) {
-                val q = s.toString()
-                matches = if (q.isBlank()) apps
-                    else apps.map { it to matchScore(it.label, q) }.filter { it.second > 0 }.sortedByDescending { it.second }.map { it.first }
-                adapter.clear(); adapter.addAll(matches.map { it.label })
+        val dialog = Dialog(this, android.R.style.Theme_DeviceDefault_NoActionBar_Fullscreen)
+        val count = legend("", 10f, R.color.legend_secondary)
+        val title = heading(R.string.best_matches)
+        val row = LinearLayout(this).apply { clipChildren = false; clipToPadding = false; setPadding(0, dp(8), 0, dp(8)) }
+        val none = legend(getString(R.string.no_matches), 13f, R.color.legend_secondary)
+        val w = tileW * 6 / 5
+        fun show(q: String) {
+            matches = if (q.isBlank()) apps
+                else apps.map { it to matchScore(it.label, q) }.filter { it.second > 0 }.sortedByDescending { it.second }.map { it.first }
+            count.text = resources.getQuantityString(R.plurals.app_count, matches.size, matches.size)
+            title.setText(if (q.isBlank()) R.string.all_apps else R.string.best_matches)
+            none.visibility = if (matches.isEmpty()) View.VISIBLE else View.GONE
+            row.removeAllViews()
+            matches.take(12).forEachIndexed { i, app ->
+                row.addView(appTile(app, "s:" + app.pkg).apply {
+                    setOnClickListener { dialog.dismiss(); launch(app.pkg) }
+                }, LinearLayout.LayoutParams(w, w * 9 / 16).apply { if (i > 0) marginStart = dp(16) })
             }
+        }
+        val field = EditText(this).apply {
+            hint = getString(R.string.search_hint)
+            isSingleLine = true
+            imeOptions = EditorInfo.IME_ACTION_GO
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 22f)
+            setTextColor(getColor(R.color.legend))
+            setHintTextColor(getColor(R.color.legend_secondary))
+            background = null
+            addTextChangedListener(object : TextWatcher {
+                override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+                override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+                override fun afterTextChanged(s: Editable) = show(s.toString())
+            })
+            // OK on the keyboard opens the best match.
+            setOnEditorActionListener { _, _, _ -> matches.firstOrNull()?.let { dialog.dismiss(); launch(it.pkg) }; true }
+        }
+        dialog.setContentView(LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(48), dp(36), dp(48), 0)
+            background = ColorDrawable(0xF21C1B19.toInt())
+            addView(LinearLayout(context).apply {
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(20), 0, dp(20), 0)
+                background = rounded(getColor(R.color.housing), 28).apply { setStroke(dp(2), accent) }
+                addView(icon(R.drawable.ic_search, getColor(R.color.legend_secondary)), LinearLayout.LayoutParams(dp(20), dp(20)).apply { marginEnd = dp(12) })
+                addView(field, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+                addView(count)
+            }, LinearLayout.LayoutParams(MATCH_PARENT, dp(56)))
+            addView(title.apply { setPadding(0, dp(22), 0, dp(4)) })
+            addView(none)
+            addView(HorizontalScrollView(context).apply {
+                isHorizontalScrollBarEnabled = false
+                clipChildren = false
+                clipToPadding = false
+                addView(row)
+            })
+            addView(legend(getString(R.string.search_help), 10f, R.color.legend_secondary).apply { setPadding(0, dp(16), 0, 0) })
         })
-        // OK on the keyboard opens the best match.
-        field.setOnEditorActionListener { _, _, _ -> matches.firstOrNull()?.let { dialog.dismiss(); launch(it.pkg) }; true }
-        results.setOnItemClickListener { _, _, i, _ -> dialog.dismiss(); launch(matches[i].pkg) }
+        dialog.window!!.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE or WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING)
+        show("")
         dialog.show()
     }
 }
@@ -415,3 +521,12 @@ const val BACKGROUND_FILE = "background"
 
 /** The largest power-of-two sample size that keeps a [side]-pixel image at least [target] pixels. */
 fun sampleSize(side: Int, target: Int): Int = Integer.highestOneBit((side / target.coerceAtLeast(1)).coerceAtLeast(1))
+
+/** [f] decoded at about [width] pixels wide: a 4000 px photo at full size would hold ~60 MB on a 2 GB TV. */
+fun decodeSized(f: File, width: Int) = runCatching {
+    val o = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    BitmapFactory.decodeFile(f.path, o)
+    o.inSampleSize = sampleSize(maxOf(o.outWidth, o.outHeight), width)
+    o.inJustDecodeBounds = false
+    BitmapFactory.decodeFile(f.path, o)
+}.getOrNull()

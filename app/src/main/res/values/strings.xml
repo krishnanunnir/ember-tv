@@ -1,13 +1,13 @@
 <resources>
     <string name="app_name">Ember</string>
-    <string name="favourites">FAVOURITES</string>
-    <string name="inputs">INPUTS</string>
+    <string name="favourites">Favourites</string>
+    <string name="inputs">Inputs</string>
     <string name="input_connected">Connected</string>
     <string name="input_standby">On standby</string>
     <string name="input_empty">Nothing plugged in</string>
-    <string name="all_apps">ALL APPS</string>
-    <string name="settings">SETTINGS</string>
-    <string name="search">SEARCH</string>
+    <string name="all_apps">All apps</string>
+    <string name="settings">Settings</string>
+    <string name="search">Search</string>
     <string name="search_hint">Search apps</string>
     <string name="rename">Rename</string>
     <string name="hide">Hide</string>
@@ -22,22 +22,22 @@
     <string name="watcher_description">Opens Ember when you press Home, instead of the Google TV home screen. Ember reads nothing else.</string>
 
     <!-- Settings -->
-    <string name="settings_title">Ember settings</string>
+    <string name="settings_title">Settings</string>
     <string name="on">On</string>
     <string name="off">Off</string>
     <string name="set_tv">TV settings</string>
     <string name="set_tv_info">Network, picture, sound and the rest of the TV</string>
-    <string name="sec_look">LOOK</string>
+    <string name="sec_look">Look</string>
     <string name="set_background">Background</string>
     <string name="bg_picture">Mountains</string>
     <string name="bg_plain">Plain</string>
-    <string name="bg_image">Own picture…</string>
+    <string name="bg_image">Own picture</string>
     <string name="set_dim">Dimming</string>
     <string name="set_accent">Accent colour</string>
     <string name="set_icon_pack">Icon pack</string>
     <string name="set_icon_pack_info">For apps without a TV banner</string>
     <string name="icon_pack_none">None</string>
-    <string name="sec_home">HOME</string>
+    <string name="sec_home">Home</string>
     <string name="set_clock">Clock</string>
     <string name="clock_system">As the TV</string>
     <string name="clock_12">12-hour</string>
@@ -50,11 +50,11 @@
         <item quantity="one">%d app hidden</item>
         <item quantity="other">%d apps hidden</item>
     </plurals>
-    <string name="sec_home_button">HOME BUTTON</string>
+    <string name="sec_home_button">Home button</string>
     <string name="set_watcher">Open Ember with Home</string>
     <string name="watcher_on">On</string>
     <string name="watcher_off">Off: Home opens the TV\'s own home. Turn on Ember in Accessibility.</string>
-    <string name="sec_backup">BACKUP</string>
+    <string name="sec_backup">Backup</string>
     <string name="set_backup">Back up</string>
     <string name="set_backup_info">Settings, favourites, hidden and renamed apps</string>
     <string name="set_restore">Restore</string>
@@ -67,7 +67,7 @@
     <string name="restore_failed">That isn\'t an Ember backup</string>
     <string name="no_picker_image">This TV has no file picker to choose a picture with</string>
     <string name="image_failed">Couldn\'t use that picture (25 MB at most)</string>
-    <string name="sec_about">ABOUT</string>
+    <string name="sec_about">About</string>
     <string name="set_version">Ember</string>
     <string name="about_info">Version %1$s · MIT licence · image credits</string>
     <string name="licence">Ember is free software under the MIT licence.</string>
@@ -82,4 +82,32 @@
     <string name="color_indigo">Indigo</string>
     <string name="color_purple">Purple</string>
     <string name="color_pink">Pink</string>
+    <string name="hold_for_options">Hold OK for options</string>
+    <string name="in_favourites">In Favourites · %1$d of %2$d</string>
+    <string name="not_in_favourites">Not in Favourites</string>
+    <string name="rename_title">Rename %1$s</string>
+    <string name="rename_label">Name on Home</string>
+    <string name="rename_hint">Leave it empty to use the app\'s own name and banner.</string>
+    <string name="save">Save</string>
+    <string name="cancel">Cancel</string>
+    <string name="best_matches">Best matches</string>
+    <string name="no_matches">No apps match</string>
+    <string name="search_help">Press OK on the keyboard to open the first match. Down moves into the results.</string>
+    <plurals name="app_count">
+        <item quantity="one">%1$d app</item>
+        <item quantity="other">%1$d apps</item>
+    </plurals>
+    <string name="dim_info">Left and right to change</string>
+    <string name="preview_caption">Preview of Home. It changes as you go.</string>
+    <string name="accent_info">The edge that shows what the remote is on.</string>
+    <string name="bg_picture_info">The built-in picture</string>
+    <string name="bg_plain_info">Warm charcoal</string>
+    <string name="bg_image_info">Choose a picture</string>
+    <string name="bg_in_use">In use</string>
+    <string name="bg_no_picker">Needs a file picker app</string>
+    <string name="hidden_summary">%1$d of %2$d hidden · OK shows or hides</string>
+    <string name="hidden_badge">Hidden</string>
+    <string name="on_home">On Home</string>
+    <string name="hidden_from_home">Hidden from Home</string>
+    <string name="hidden_footer">You can also hold OK on any app on Home and choose Hide. Hidden apps still open from search.</string>
 </resources>

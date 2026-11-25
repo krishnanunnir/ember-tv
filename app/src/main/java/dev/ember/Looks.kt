@@ -31,7 +31,8 @@ val COLS = Choice("cols", R.string.set_cols, "5", listOf("4", "5", "6"))
 val CLOCK = Choice("clock", R.string.set_clock, "system", listOf("system", "12", "24", "off"),
     listOf(R.string.clock_system, R.string.clock_12, R.string.clock_24, R.string.off))
 val INPUTS = onOff("inputs", R.string.set_inputs)
-val EMPTY_PORTS = onOff("emptyPorts", R.string.set_empty_ports)
+// Empty ports are hidden unless asked for: three "Nothing plugged in" keys are clutter.
+val EMPTY_PORTS = Choice("emptyPorts", R.string.set_empty_ports, "off", listOf("on", "off"), listOf(R.string.on, R.string.off))
 
 val Context.prefs: SharedPreferences get() = getSharedPreferences("ember", Context.MODE_PRIVATE)
 operator fun SharedPreferences.get(c: Choice): String = getString(c.key, c.default)!!.takeIf { it in c.values } ?: c.default
