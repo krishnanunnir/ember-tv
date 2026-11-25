@@ -4,7 +4,7 @@
 
 A small, calm home screen for Android TV and Google TV, built for the remote.
 
-- A clock, a **Favourites** row and **All apps**, as 16:9 banners.
+- A clock, a **Favourites** row, your **Inputs** (HDMI, AV) and **All apps**, as 16:9 banners.
 - Hold **OK** on an app to add it to Favourites, move it, open App info or uninstall it.
 - No ads, no recommendations, no network access, no tracking.
 

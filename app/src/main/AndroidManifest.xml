@@ -3,6 +3,8 @@
 
     <uses-feature android:name="android.software.leanback" android:required="false" />
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
+    <!-- HDMI inputs, where the TV has them. -->
+    <uses-feature android:name="android.software.live_tv" android:required="false" />
 
     <!-- Uninstall from the long-press menu. -->
     <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />

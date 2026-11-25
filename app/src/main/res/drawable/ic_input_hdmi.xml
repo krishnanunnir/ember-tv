@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- An HDMI plug face, in the outlined Material Symbols style (24-unit grid, round 2-unit strokes). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+    <path android:strokeColor="#FFFFFF" android:strokeWidth="2" android:strokeLineCap="round" android:strokeLineJoin="round"
+        android:pathData="M3,8.5 H21 V12.5 L18.5,15.5 H5.5 L3,12.5 Z M7.5,12 H16.5" />
+</vector>

@@ -11,8 +11,11 @@ import android.graphics.Typeface
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.StateListDrawable
+import android.media.tv.TvContract
+import android.media.tv.TvInputManager
 import android.net.Uri
 import android.os.Bundle
+import android.os.Handler
 import android.provider.Settings
 import android.text.format.DateFormat
 import android.util.TypedValue
@@ -34,16 +37,32 @@ import android.widget.Toast
 class Home : Activity() {
 
     private class App(val pkg: String, val label: String, val banner: Drawable?, val icon: Drawable)
+    private class Input(val id: String, val label: String, val state: Int) {
+        val plugged get() = state != TvInputManager.INPUT_STATE_DISCONNECTED
+    }
 
     private val prefs by lazy { getSharedPreferences("ember", MODE_PRIVATE) }
     private lateinit var favRow: LinearLayout
     private lateinit var favHint: TextView
     private lateinit var grid: LinearLayout
+    private lateinit var inputLabel: View
+    private lateinit var inputRow: LinearLayout
     private var tileW = 0
     private var tileH = 0
 
+    /** Null where the device has no TV input framework (phones, some boxes). */
+    private val tvInputs by lazy { getSystemService(TV_INPUT_SERVICE) as? TvInputManager }
+
     private val packagesChanged = object : BroadcastReceiver() {
         override fun onReceive(c: Context, i: Intent) = render(currentFocus?.tag as? String)
+    }
+
+    // Plugging a device in or out, or renaming an input, rebuilds the rows.
+    private val inputsChanged = object : TvInputManager.TvInputCallback() {
+        override fun onInputStateChanged(inputId: String, state: Int) = render(currentFocus?.tag as? String)
+        override fun onInputAdded(inputId: String) = render(currentFocus?.tag as? String)
+        override fun onInputRemoved(inputId: String) = render(currentFocus?.tag as? String)
+        override fun onInputUpdated(inputId: String) = render(currentFocus?.tag as? String)
     }
 
     private fun dp(v: Number) = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, v.toFloat(), resources.displayMetrics).toInt()
@@ -61,6 +80,8 @@ class Home : Activity() {
         favRow = LinearLayout(this).apply { clipChildren = false; clipToPadding = false; setPadding(0, dp(10), 0, dp(10)) }
         favHint = legend(getString(R.string.no_favourites), 16f, R.color.legend_secondary)
         grid = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; clipChildren = false }
+        inputLabel = label(R.string.inputs)
+        inputRow = LinearLayout(this).apply { clipChildren = false; clipToPadding = false; setPadding(0, dp(10), 0, dp(10)) }
 
         val column = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -76,6 +97,8 @@ class Home : Activity() {
                 clipToPadding = false
                 addView(favRow)
             })
+            addView(inputLabel)
+            addView(inputRow)
             addView(label(R.string.all_apps))
             addView(grid)
         }
@@ -105,10 +128,12 @@ class Home : Activity() {
             addAction(Intent.ACTION_PACKAGE_CHANGED)
             addDataScheme("package")
         })
+        tvInputs?.registerCallback(inputsChanged, Handler(mainLooper))
         render(null)
     }
 
     override fun onDestroy() {
+        tvInputs?.unregisterCallback(inputsChanged)
         unregisterReceiver(packagesChanged)
         super.onDestroy()
     }
@@ -189,8 +214,32 @@ class Home : Activity() {
         get() = prefs.getString("favs", "")!!.split(',').filter { it.isNotEmpty() }.toMutableList()
         set(v) = prefs.edit().putString("favs", v.joinToString(",")).apply()
 
-    /** Rebuilds both sections and puts focus back on [focusTag] ("f:pkg" or "a:pkg") if it still exists. */
+    /**
+     * The TV's physical inputs (HDMI, AV), one per port. A device found over HDMI-CEC appears as a child input of its
+     * port; its name ("PlayStation 5") beats the port's, but the user's own name for the port beats both.
+     */
+    private fun loadInputs(): List<Input> {
+        val tim = tvInputs ?: return emptyList()
+        val all = tim.tvInputList
+        return all.filter { it.isPassthroughInput && it.parentId == null }.map { port ->
+            val devices = all.filter { it.parentId == port.id }
+            val label = port.loadCustomLabel(this)?.toString()?.takeIf { it.isNotBlank() }
+                ?: devices.firstOrNull()?.let { (it.loadCustomLabel(this) ?: it.loadLabel(this)).toString() }
+                ?: port.loadLabel(this).toString()
+            // The best of the port and its devices: CONNECTED (0) < CONNECTED_STANDBY (1) < DISCONNECTED (2).
+            Input(port.id, label, (devices + port).minOf { tim.getInputState(it.id) })
+        }
+    }
+
+    /** Rebuilds every section and puts focus back on [focusTag] ("f:pkg", "i:input" or "a:pkg") if it still exists. */
     private fun render(focusTag: String?) {
+        val inputs = loadInputs()
+        inputRow.removeAllViews()
+        inputs.forEachIndexed { i, input ->
+            inputRow.addView(inputTile(input), LinearLayout.LayoutParams(tileW, tileH).apply { if (i > 0) marginStart = dp(16) })
+        }
+        (if (inputs.isEmpty()) View.GONE else View.VISIBLE).let { inputLabel.visibility = it; inputRow.visibility = it }
+
         val apps = loadApps()
         val byPkg = apps.associateBy { it.pkg }
         val favList = favs.filter { it in byPkg }
@@ -216,15 +265,47 @@ class Home : Activity() {
         target?.requestFocus()
     }
 
-    private fun tile(app: App, section: String): View = FrameLayout(this).apply {
-        tag = section + app.pkg
+    /** The shared 16:9 key: raised, rounded, orange edge and a small lift on focus. */
+    private fun key(tag: String, description: String) = FrameLayout(this).apply {
+        this.tag = tag
         isFocusable = true
-        contentDescription = app.label
+        contentDescription = description
         val radius = dp(12).toFloat()
         background = GradientDrawable().apply { cornerRadius = radius; setColor(color(R.color.raised)) }
         foreground = focusRing(radius)
         clipToOutline = true
+        setOnFocusChangeListener { v, has ->
+            v.animate().scaleX(if (has) 1.08f else 1f).scaleY(if (has) 1.08f else 1f).translationZ(if (has) dp(8).toFloat() else 0f).setDuration(120).start()
+        }
+    }
 
+    private fun inputTile(input: Input): View = key("i:" + input.id, input.label).apply {
+        addView(LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            // Empty ports stay in place, dimmed, so HDMI 1–3 keep their order.
+            alpha = if (input.plugged) 1f else 0.5f
+            addView(ImageView(context).apply {
+                setImageResource(R.drawable.ic_input_hdmi)
+                setColorFilter(color(R.color.legend))
+            }, LinearLayout.LayoutParams(dp(32), dp(32)))
+            addView(legend(input.label, 15f, R.color.legend).apply {
+                maxLines = 1
+                gravity = Gravity.CENTER
+                ellipsize = android.text.TextUtils.TruncateAt.END
+                setPadding(dp(8), dp(4), dp(8), 0)
+            })
+            addView(legend(getString(when (input.state) {
+                TvInputManager.INPUT_STATE_CONNECTED -> R.string.input_connected
+                TvInputManager.INPUT_STATE_CONNECTED_STANDBY -> R.string.input_standby
+                else -> R.string.input_empty
+            }), 12f, R.color.legend_secondary))
+        }, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+        // The TV's own input player shows the picture, as with Google TV's Inputs menu.
+        setOnClickListener { open(Intent(Intent.ACTION_VIEW, TvContract.buildChannelUriForPassthroughInput(input.id))) }
+    }
+
+    private fun tile(app: App, section: String): View = key(section + app.pkg, app.label).apply {
         if (app.banner != null) {
             addView(ImageView(context).apply {
                 setImageDrawable(app.banner)
@@ -245,9 +326,6 @@ class Home : Activity() {
             }, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
         }
 
-        setOnFocusChangeListener { v, has ->
-            v.animate().scaleX(if (has) 1.08f else 1f).scaleY(if (has) 1.08f else 1f).translationZ(if (has) dp(8).toFloat() else 0f).setDuration(120).start()
-        }
         setOnClickListener { launch(app.pkg) }
         setOnLongClickListener { menu(app, section); true }
     }
